@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Factibilidad DFM — Solicitud de Requisitos</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  LOGIN                                                      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="logo">
+      <h1>DFM Factibilidad</h1>
+      <p>Solicitud de Requisitos — Sistema de Gestión</p>
+    </div>
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="login-email">Correo electrónico</label>
+        <input type="email" id="login-email" class="form-control" placeholder="usuario@empresa.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="login-pass">Contraseña</label>
+        <input type="password" id="login-pass" class="form-control" placeholder="••••••••" required>
+      </div>
+      <p id="login-err" class="alert alert-danger" style="display:none;margin-bottom:12px"></p>
+      <button type="submit" class="btn btn-primary w-full" style="justify-content:center">
+        Iniciar sesión
+      </button>
+    </form>
+    <p class="text-sm text-gray text-center mt-4">
+      Usuario inicial: <strong>admin@dfm.com</strong> / <strong>Admin123!</strong>
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  APP SHELL                                                  -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <button id="burger-btn" class="burger" title="Menú">☰</button>
+    <div class="brand">DFM Factibilidad</div>
+    <div class="user-badge" id="user-badge" title="Clic para cerrar sesión">
+      <div class="avatar" id="hdr-avatar">A</div>
+      <div class="user-info">
+        <div class="name" id="hdr-name">Usuario</div>
+        <div class="rol"  id="hdr-rol">rol</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <nav>
+      <div class="section-label">Principal</div>
+      <a href="#" data-view="dashboard">Dashboard</a>
+      <a href="#" data-view="lista">Solicitudes</a>
+
+      <div class="section-label admin-only">Administración</div>
+      <a href="#" data-view="usuarios" class="admin-only">Usuarios</a>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+
+    <!-- ─ VIEW: DASHBOARD ────────────────────────────────────── -->
+    <div id="view-dashboard" class="view">
+      <div class="page-header">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Resumen general de solicitudes de factibilidad</p>
+        </div>
+        <button class="btn btn-primary" id="btn-nueva-sol">+ Nueva Solicitud</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total</div>
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-sub">Solicitudes creadas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Borradores</div>
+          <div class="stat-value" id="stat-borrador" style="color:#6b7280">0</div>
+          <div class="stat-sub">En edición</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">En proceso</div>
+          <div class="stat-value" id="stat-enviado" style="color:#1a56db">0</div>
+          <div class="stat-sub">Enviadas / En revisión</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Aprobadas</div>
+          <div class="stat-value" id="stat-aprobado" style="color:#0e9f6e">0</div>
+          <div class="stat-sub">Listas para cotizar</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Solicitudes recientes</h3>
+          <a href="#" onclick="showView('lista');loadLista();return false" style="font-size:13px">Ver todas →</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th><th>Cliente</th><th>Líder</th><th>% Completado</th><th>Estado</th><th>Fecha</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="dash-table-body">
+              <tr><td colspan="7" class="text-center text-gray" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /dashboard -->
+
+
+    <!-- ─ VIEW: LISTA ────────────────────────────────────────── -->
+    <div id="view-lista" class="view">
+      <div class="page-header">
+        <div>
+          <h2>Solicitudes de Factibilidad</h2>
+          <p>Gestiona todas las solicitudes de requisitos DFM</p>
+        </div>
+        <button class="btn btn-primary" id="btn-nueva-sol2">+ Nueva Solicitud</button>
+      </div>
+
+      <div class="card mb-4" style="margin-bottom:16px">
+        <div class="card-body" style="padding:16px;display:flex;gap:12px;flex-wrap:wrap">
+          <input type="text" id="search-input" class="form-control" placeholder="Buscar por folio, cliente o líder…" style="max-width:320px">
+          <select id="filter-estado" class="form-control" style="max-width:180px">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="enviado">Enviado</option>
+            <option value="en_revision">En Revisión</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th><th>Cliente</th><th>Líder</th><th>% Completado</th><th>Estado</th><th>Fecha</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="lista-table-body">
+              <tr><td colspan="7" class="text-center text-gray" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /lista -->
+
+
+    <!-- ─ VIEW: SOLICITUD (formulario) ───────────────────────── -->
+    <div id="view-solicitud" class="view">
+      <!-- Toolbar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-outline btn-sm" onclick="showView('lista');loadLista()">← Volver</button>
+          <h2 id="sol-folio" style="font-size:18px;font-weight:700"></h2>
+          <span id="sol-estado"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span id="saved-badge" style="font-size:12px;color:#0e9f6e;opacity:0;transition:opacity .4s">✓ Guardado</span>
+          <button id="btn-guardar" class="btn btn-outline btn-sm">💾 Guardar borrador</button>
+          <button id="btn-enviar"  class="btn btn-success" disabled title="Necesitas 75% o más para enviar">
+            📤 Enviar solicitud
+          </button>
+          <div id="admin-actions" style="display:none;display:flex;gap:8px">
+            <button id="btn-revision"  class="btn btn-outline btn-sm" style="border-color:#d97706;color:#d97706">🔍 En Revisión</button>
+            <button id="btn-aprobar"   class="btn btn-success btn-sm">✅ Aprobar</button>
+            <button id="btn-rechazar"  class="btn btn-danger  btn-sm">❌ Rechazar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info general -->
+      <div class="card mb-4" style="margin-bottom:16px">
+        <div class="card-body" style="padding:14px 20px;display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:#6b7280">
+          <span>Creado por: <strong id="sol-autor" style="color:#111827"></strong></span>
+          <span>Fecha: <strong id="sol-creado" style="color:#111827"></strong></span>
+        </div>
+      </div>
+
+      <!-- BARRA DE PROGRESO -->
+      <div class="progress-wrap card" style="margin-bottom:16px">
+        <div class="card-body" style="padding:16px 20px">
+          <div class="progress-info">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:2px">Porcentaje de completado</div>
+              <div style="font-size:12px;color:#9ca3af">Mínimo 75% para poder enviar</div>
+            </div>
+            <div class="pct-label low" id="progress-label">0%</div>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill low" id="progress-fill" style="width:0%"></div>
+          </div>
+          <!-- Marker 75% -->
+          <div style="position:relative;height:0">
+            <div style="position:absolute;left:75%;top:-14px;transform:translateX(-50%);font-size:10px;color:#6b7280;white-space:nowrap">▲ 75%</div>
+          </div>
+          <div class="progress-tip" id="progress-tip" style="margin-top:16px">⚠️ Completa los campos requeridos</div>
+        </div>
+      </div>
+
+      <!-- Secciones del formulario -->
+      <div id="form-sections"></div>
+
+      <!-- Historial -->
+      <div class="card" style="margin-top:20px">
+        <div class="card-header"><h3>📜 Historial de cambios</h3></div>
+        <div class="card-body" id="historial-body">Sin historial aún.</div>
+      </div>
+    </div><!-- /solicitud -->
+
+
+    <!-- ─ VIEW: USUARIOS ─────────────────────────────────────── -->
+    <div id="view-usuarios" class="view admin-only">
+      <div class="page-header">
+        <div>
+          <h2>Gestión de Usuarios</h2>
+          <p>Agrega y administra los usuarios del sistema</p>
+        </div>
+        <button class="btn btn-primary" id="btn-nuevo-usuario">+ Nuevo Usuario</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th><th>Email</th><th>Rol</th><th>Departamento</th><th>Estado</th><th>Último acceso</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="usuarios-table-body">
+              <tr><td colspan="7" class="text-center text-gray" style="padding:32px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /usuarios -->
+
+  </main><!-- /main-content -->
+</div><!-- /app -->
+
+
+<!-- ─ MODAL: NUEVO USUARIO ──────────────────────────────────── -->
+<div id="modal-usuario" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👤 Nuevo Usuario</h3>
+      <button class="btn-icon" id="btn-close-modal">✕</button>
+    </div>
+    <form id="form-usuario">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Nombre completo <span class="req">*</span></label>
+          <input type="text" name="nombre" class="form-control" required placeholder="Ej. Juan Pérez">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Correo electrónico <span class="req">*</span></label>
+          <input type="email" name="email" class="form-control" required placeholder="usuario@empresa.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña temporal <span class="req">*</span></label>
+          <input type="password" name="password" class="form-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr">
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <select name="rol" class="form-control">
+              <option value="ingenieria">Ingeniería</option>
+              <option value="ventas">Ventas</option>
+              <option value="lider">Líder de Proyecto</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Departamento</label>
+            <input type="text" name="departamento" class="form-control" placeholder="Ej. Ingeniería">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeUsuarioModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
