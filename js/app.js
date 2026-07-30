@@ -230,6 +230,7 @@ function renderFormSolicitud(sol) {
   camposDef.forEach(seccion => {
     const div = document.createElement('div');
     div.className = 'form-section';
+    div.dataset.sectionId = seccion.id; // ← ID para poder referenciar la sección
 
     // Section weight total
     const totalPeso = seccion.campos.reduce((a, c) => a + (c.peso || 0), 0);
@@ -335,6 +336,42 @@ function renderFormSolicitud(sol) {
 
   // Historial
   renderHistorial(sol.historial || []);
+
+  // ── Visibilidad condicional: sección preformados ──────────────
+  setupPreformadosToggle(sol);
+}
+
+/* ── Preformados: mostrar sección solo si hay tipo preformado ── */
+function setupPreformadosToggle(sol) {
+  const seccion = document.querySelector('[data-section-id="preformados"]');
+  if (!seccion) return;
+
+  // Determina si ya hay alguna opción seleccionada al cargar
+  const valGuardado = sol.campos?.mat_preformado || '';
+  const haySeleccion = valGuardado.trim() !== '';
+
+  // Oculta o muestra según el valor inicial
+  seccion.style.display = haySeleccion ? '' : 'none';
+
+  // Escucha cambios en los checkboxes de mat_preformado
+  document.querySelectorAll('input[name="mat_preformado"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const alguno = document.querySelectorAll('input[name="mat_preformado"]:checked').length > 0;
+
+      if (alguno) {
+        seccion.style.display = '';
+        // Asegura que la sección quede expandida la primera vez que aparece
+        const header = seccion.querySelector('.form-section-header');
+        const body   = seccion.querySelector('.form-section-body');
+        if (header && !header.classList.contains('open')) {
+          header.classList.add('open');
+          body.classList.remove('collapsed');
+        }
+      } else {
+        seccion.style.display = 'none';
+      }
+    });
+  });
 }
 
 function renderHistorial(hist) {
