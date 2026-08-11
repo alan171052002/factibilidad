@@ -5,23 +5,31 @@
 'use strict';
 
 const API = 'php/api.php';
-let currentUser   = null;
-let currentSolId  = null;
+let currentUser = null;
+let currentSolId = null;
 let autoSaveTimer = null;
-let camposDef     = [];
+let camposDef = [];
 let solicitudesCache = [];
 
 /* ── Utilidades ─────────────────────────────────────────────── */
 async function api(action, data = {}, method = 'POST') {
-  const opts = { method, headers: {} };
-  if (method === 'POST') {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify({ action, ...data });
+  try {
+    const opts = { method, headers: {} };
+    if (method === 'POST') {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify({ action, ...data });
+    }
+    const url = method === 'GET'
+      ? `${API}?action=${action}&${new URLSearchParams(data)}`
+      : API;
+    const res = await fetch(method === 'GET' ? url : API, opts);
+    const json = await res.json();
+    return json;
+  } catch (err) {
+    // Bug #5 fix: capturar errores de red y devolverlos como respuesta normalizada
+    console.error('API error:', err);
+    return { ok: false, error: 'Error de conexión. Verifica tu red e intenta de nuevo.' };
   }
-  const url = method === 'GET' ? `${API}?action=${action}&${new URLSearchParams(data)}` : API;
-  const res  = await fetch(method === 'GET' ? url : API, opts);
-  const json = await res.json();
-  return json;
 }
 
 function toast(msg, type = 'info') {
@@ -62,12 +70,19 @@ async function checkLogin() {
 async function doLogin(e) {
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-pass').value;
+  const pass = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
+
+  // Bug #1 fix: mostrar el elemento antes de escribir el error
+  errEl.style.display = 'none';
   errEl.textContent = '';
 
   const r = await api('login', { email, password: pass });
-  if (!r.ok) { errEl.textContent = r.error; return; }
+  if (!r.ok) {
+    errEl.textContent = r.error;
+    errEl.style.display = 'block';   // ← antes nunca se mostraba
+    return;
+  }
   currentUser = r.data;
   document.getElementById('login-screen').style.display = 'none';
   bootApp();
@@ -87,18 +102,15 @@ async function bootApp() {
   document.getElementById('app').style.display = 'block';
   document.getElementById('login-screen').style.display = 'none';
 
-  // Set user info in header
   const ini = (currentUser.nombre || 'U').charAt(0).toUpperCase();
   document.getElementById('hdr-avatar').textContent = ini;
-  document.getElementById('hdr-name').textContent   = currentUser.nombre;
-  document.getElementById('hdr-rol').textContent    = currentUser.rol;
+  document.getElementById('hdr-name').textContent = currentUser.nombre;
+  document.getElementById('hdr-rol').textContent = currentUser.rol;
 
-  // Show/hide admin sections
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = currentUser.rol === 'admin' ? '' : 'none';
   });
 
-  // Load campos definition
   const cd = await api('campos_definicion', {}, 'GET');
   if (cd.ok) camposDef = cd.data;
 
@@ -130,9 +142,9 @@ async function loadDashboard() {
   const stats = { total: 0, borrador: 0, enviado: 0, en_revision: 0, aprobado: 0, rechazado: 0 };
   r.data.forEach(s => { stats.total++; stats[s.estado] = (stats[s.estado] || 0) + 1; });
 
-  document.getElementById('stat-total').textContent    = stats.total;
+  document.getElementById('stat-total').textContent = stats.total;
   document.getElementById('stat-borrador').textContent = stats.borrador || 0;
-  document.getElementById('stat-enviado').textContent  = (stats.enviado || 0) + (stats.en_revision || 0);
+  document.getElementById('stat-enviado').textContent = (stats.enviado || 0) + (stats.en_revision || 0);
   document.getElementById('stat-aprobado').textContent = stats.aprobado || 0;
 
   renderSolicitudesTable(r.data, 'dash-table-body', true);
@@ -146,23 +158,24 @@ function renderSolicitudesTable(data, tbodyId, limit = false) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray" style="padding:32px">No hay solicitudes</td></tr>';
     return;
   }
+  // Bug #6 fix: pasar folio, cliente, lider_proyecto y estado por escHtml
   tbody.innerHTML = rows.map(s => `
     <tr>
-      <td><strong>${s.folio}</strong></td>
-      <td>${s.cliente || '—'}</td>
-      <td>${s.lider_proyecto || '—'}</td>
+      <td><strong>${escHtml(s.folio)}</strong></td>
+      <td>${escHtml(s.cliente || '—')}</td>
+      <td>${escHtml(s.lider_proyecto || '—')}</td>
       <td>
         <div style="display:flex;align-items:center;gap:8px">
           <div style="flex:1;background:#e5e7eb;border-radius:99px;height:6px;min-width:60px">
-            <div style="height:6px;border-radius:99px;background:${pctColor(s.porcentaje_completado)};width:${Math.min(s.porcentaje_completado,100)}%"></div>
+            <div style="height:6px;border-radius:99px;background:${pctColor(s.porcentaje_completado)};width:${Math.min(s.porcentaje_completado, 100)}%"></div>
           </div>
           <span style="font-size:12px;font-weight:600;color:${pctColor(s.porcentaje_completado)}">${fmtPct(s.porcentaje_completado)}</span>
         </div>
       </td>
-      <td><span class="badge badge-${s.estado}">${estadoLabel(s.estado)}</span></td>
+      <td><span class="badge badge-${escHtml(s.estado)}">${estadoLabel(s.estado)}</span></td>
       <td>${fmtDate(s.creado_en)}</td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="openSolicitud(${s.id})">Ver / Editar</button>
+        <button class="btn btn-sm btn-outline" onclick="openSolicitud(${parseInt(s.id, 10)})">Ver / Editar</button>
       </td>
     </tr>
   `).join('');
@@ -176,7 +189,7 @@ function pctColor(p) {
 }
 function estadoLabel(e) {
   const m = { borrador: 'Borrador', enviado: 'Enviado', en_revision: 'En Revisión', aprobado: 'Aprobado', rechazado: 'Rechazado' };
-  return m[e] || e;
+  return m[e] || escHtml(e);
 }
 
 /* ── Lista de solicitudes ────────────────────────────────────── */
@@ -188,10 +201,10 @@ async function loadLista() {
 }
 
 function filterLista() {
-  const q  = document.getElementById('search-input').value.toLowerCase();
+  const q = document.getElementById('search-input').value.toLowerCase();
   const st = document.getElementById('filter-estado').value;
   let data = solicitudesCache;
-  if (q)  data = data.filter(s => (s.folio + s.cliente + s.lider_proyecto).toLowerCase().includes(q));
+  if (q) data = data.filter(s => (s.folio + s.cliente + s.lider_proyecto).toLowerCase().includes(q));
   if (st) data = data.filter(s => s.estado === st);
   renderSolicitudesTable(data, 'lista-table-body');
 }
@@ -201,6 +214,7 @@ async function nuevaSolicitud() {
   const r = await api('solicitud_nueva');
   if (!r.ok) { toast(r.error, 'error'); return; }
   toast('Solicitud creada: ' + r.data.folio, 'success');
+  // Bug #4 fix: openSolicitud ya navega a 'solicitud', no hace falta showView('lista') aquí
   await openSolicitud(r.data.id);
 }
 
@@ -209,32 +223,33 @@ async function openSolicitud(id) {
   currentSolId = id;
   const r = await api('solicitud_get', { id }, 'GET');
   if (!r.ok) { toast(r.error, 'error'); return; }
-  const sol = r.data;
-  renderFormSolicitud(sol);
+  renderFormSolicitud(r.data);
   showView('solicitud');
 }
 
 function renderFormSolicitud(sol) {
-  const isEnviado = sol.estado === 'enviado' && currentUser.rol !== 'admin';
+  // Bug #3 fix: bloquear inputs para cualquier estado no-borrador cuando el usuario no es admin
+  const estadosBloqueados = ['enviado', 'en_revision', 'aprobado', 'rechazado'];
+  const isReadOnly = estadosBloqueados.includes(sol.estado) && currentUser.rol !== 'admin';
+
   const container = document.getElementById('form-sections');
 
-  // Header info
-  document.getElementById('sol-folio').textContent  = sol.folio;
-  document.getElementById('sol-estado').innerHTML   = `<span class="badge badge-${sol.estado}">${estadoLabel(sol.estado)}</span>`;
+  document.getElementById('sol-folio').textContent = sol.folio;
+  document.getElementById('sol-estado').innerHTML = `<span class="badge badge-${escHtml(sol.estado)}">${estadoLabel(sol.estado)}</span>`;
   document.getElementById('sol-creado').textContent = fmtDate(sol.creado_en);
-  document.getElementById('sol-autor').textContent  = sol.creado_por_nombre;
+  document.getElementById('sol-autor').textContent = sol.creado_por_nombre;
 
-  // Render sections
   container.innerHTML = '';
 
   camposDef.forEach(seccion => {
     const div = document.createElement('div');
     div.className = 'form-section';
-    div.dataset.sectionId = seccion.id; // ← ID para poder referenciar la sección
+    div.dataset.sectionId = seccion.id;
 
-    // Section weight total
     const totalPeso = seccion.campos.reduce((a, c) => a + (c.peso || 0), 0);
-    const pesoLabel = totalPeso > 0 ? `<span class="sec-pct">${(totalPeso * 100).toFixed(0)}% del total</span>` : '';
+    const pesoLabel = totalPeso > 0
+      ? `<span class="sec-pct">${(totalPeso * 100).toFixed(0)}% del total</span>`
+      : '';
 
     div.innerHTML = `
       <div class="form-section-header open" onclick="toggleSection(this)">
@@ -249,10 +264,16 @@ function renderFormSolicitud(sol) {
     const grid = div.querySelector(`#sec-${seccion.id}`);
 
     seccion.campos.forEach(campo => {
-      const val   = sol.campos?.[campo.clave] ?? '';
-      const req   = campo.requerido;
-      const dis   = isEnviado ? 'disabled' : '';
-      const pLabel = campo.peso > 0 ? ` <small style="color:#6b7280;font-weight:400">(${(campo.peso * 100).toFixed(0)}%)</small>` : '';
+      // Busca primero en la raíz (ej. sol.cliente), si es undefined, busca en sol.campos (ej. sol.campos.vol_eau)
+      let val = sol[campo.clave];
+      if (val === undefined || val === null) {
+        val = sol.campos?.[campo.clave] ?? '';
+      }
+      const req = campo.requerido;
+      const dis = isReadOnly ? 'disabled' : '';   // Bug #3 fix
+      const pLabel = campo.peso > 0
+        ? ` <small style="color:#6b7280;font-weight:400">(${(campo.peso * 100).toFixed(0)}%)</small>`
+        : '';
 
       let inputHtml = '';
 
@@ -286,7 +307,7 @@ function renderFormSolicitud(sol) {
               <input type="radio" name="${campo.clave}" value="${escHtml(o)}"
                 ${selVals.includes(o) ? 'checked' : ''} ${dis}
                 onchange="scheduleAutoSave()">
-              ${o}
+              ${escHtml(o)}
             </label>`).join('') + `</div>`;
 
       } else if (campo.tipo === 'checkbox') {
@@ -297,7 +318,7 @@ function renderFormSolicitud(sol) {
               <input type="checkbox" name="${campo.clave}" value="${escHtml(o)}"
                 ${selVals.includes(o) ? 'checked' : ''} ${dis}
                 onchange="scheduleAutoSave()">
-              ${o}
+              ${escHtml(o)}
             </label>`).join('') + `</div>`;
 
       } else if (campo.tipo === 'checkbox_single') {
@@ -306,7 +327,7 @@ function renderFormSolicitud(sol) {
             <input type="checkbox" id="f-${campo.clave}" name="${campo.clave}" value="1"
               ${val === '1' ? 'checked' : ''} ${dis}
               onchange="scheduleAutoSave()">
-            ${campo.label}
+            ${escHtml(campo.label)}
           </label></div>`;
       }
 
@@ -325,19 +346,18 @@ function renderFormSolicitud(sol) {
     });
   });
 
-  // Update progress on load
   updateProgress(parseFloat(sol.porcentaje_completado || 0));
 
-  // Buttons
   const isBorrador = sol.estado === 'borrador';
   document.getElementById('btn-guardar').style.display = isBorrador ? '' : 'none';
-  document.getElementById('btn-enviar').style.display  = isBorrador ? '' : 'none';
-  document.getElementById('admin-actions').style.display = (currentUser.rol === 'admin' && sol.estado === 'enviado') ? '' : 'none';
+  document.getElementById('btn-enviar').style.display = isBorrador ? '' : 'none';
 
-  // Historial
+  // Bug #2 fix: usar 'flex' explícitamente al mostrar, nunca '' (que resuelve a block)
+  const showAdmin = currentUser.rol === 'admin' && sol.estado === 'enviado';
+  document.getElementById('admin-actions').style.display = showAdmin ? 'flex' : 'none';
+
   renderHistorial(sol.historial || []);
 
-  // ── Visibilidad condicional: sección preformados ──────────────
   setupPreformadosToggle(sol);
 }
 
@@ -346,23 +366,19 @@ function setupPreformadosToggle(sol) {
   const seccion = document.querySelector('[data-section-id="preformados"]');
   if (!seccion) return;
 
-  // Determina si ya hay alguna opción seleccionada al cargar
   const valGuardado = sol.campos?.mat_preformado || '';
   const haySeleccion = valGuardado.trim() !== '';
 
-  // Oculta o muestra según el valor inicial
   seccion.style.display = haySeleccion ? '' : 'none';
 
-  // Escucha cambios en los checkboxes de mat_preformado
   document.querySelectorAll('input[name="mat_preformado"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const alguno = document.querySelectorAll('input[name="mat_preformado"]:checked').length > 0;
 
       if (alguno) {
         seccion.style.display = '';
-        // Asegura que la sección quede expandida la primera vez que aparece
         const header = seccion.querySelector('.form-section-header');
-        const body   = seccion.querySelector('.form-section-body');
+        const body = seccion.querySelector('.form-section-body');
         if (header && !header.classList.contains('open')) {
           header.classList.add('open');
           body.classList.remove('collapsed');
@@ -381,8 +397,8 @@ function renderHistorial(hist) {
     <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #f3f4f6">
       <div style="min-width:80px;font-size:12px;color:#6b7280">${fmtDate(h.fecha)}</div>
       <div>
-        <span class="badge badge-${h.estado_hasta}">${estadoLabel(h.estado_hasta)}</span>
-        <span style="font-size:12px;color:#4b5563;margin-left:8px">por ${h.usuario_nombre}</span>
+        <span class="badge badge-${escHtml(h.estado_hasta)}">${estadoLabel(h.estado_hasta)}</span>
+        <span style="font-size:12px;color:#4b5563;margin-left:8px">por ${escHtml(h.usuario_nombre)}</span>
         ${h.comentario ? `<p style="font-size:12px;color:#6b7280;margin-top:4px">${escHtml(h.comentario)}</p>` : ''}
       </div>
     </div>`).join('');
@@ -408,9 +424,8 @@ async function guardarSolicitud(silent = false) {
     campos: collectFormValues(),
   };
 
-  // Cabecera desde campos
   const cab = ['cliente', 'lider_proyecto', 'fecha_entrada', 'fecha_entrega_equipo',
-                'fecha_estimada_cierre', 'fecha_entrega_lider', 'fecha_cierre'];
+    'fecha_estimada_cierre', 'fecha_entrega_lider', 'fecha_cierre'];
   cab.forEach(c => {
     if (payload.campos[c] !== undefined) {
       payload[c] = payload.campos[c];
@@ -457,24 +472,24 @@ function showSavedIndicator() {
 
 function updateProgress(pct) {
   pct = parseFloat(pct) || 0;
-  const fill  = document.getElementById('progress-fill');
+  const fill = document.getElementById('progress-fill');
   const label = document.getElementById('progress-label');
-  const tip   = document.getElementById('progress-tip');
+  const tip = document.getElementById('progress-tip');
   if (!fill) return;
 
   fill.style.width = Math.min(pct, 100) + '%';
   label.textContent = pct.toFixed(1) + '%';
 
   const cls = pct >= 75 ? 'ok' : pct >= 40 ? 'warn' : 'low';
-  ['ok','warn','low'].forEach(c => { fill.classList.remove(c); label.classList.remove(c); });
-  fill.classList.add(cls); label.classList.add(cls);
+  ['ok', 'warn', 'low'].forEach(c => { fill.classList.remove(c); label.classList.remove(c); });
+  fill.classList.add(cls);
+  label.classList.add(cls);
 
   if (tip) {
     if (pct >= 75) tip.textContent = '✅ Listo para enviar';
-    else           tip.textContent = `⚠️ Necesitas al menos 75% para enviar. Faltan ${(75 - pct).toFixed(1)}%`;
+    else tip.textContent = `⚠️ Necesitas al menos 75% para enviar. Faltan ${(75 - pct).toFixed(1)}%`;
   }
 
-  // Enable/disable send button
   const btn = document.getElementById('btn-enviar');
   if (btn) btn.disabled = pct < 75;
 }
@@ -482,11 +497,10 @@ function updateProgress(pct) {
 /* ── Enviar solicitud ────────────────────────────────────────── */
 async function enviarSolicitud() {
   if (!currentSolId) return;
-  // Guardar primero
   await guardarSolicitud(true);
 
-  const confirm = window.confirm('¿Estás seguro de enviar esta solicitud? No podrás editarla después del envío.');
-  if (!confirm) return;
+  const confirmed = window.confirm('¿Estás seguro de enviar esta solicitud? No podrás editarla después del envío.');
+  if (!confirmed) return;
 
   const r = await api('solicitud_enviar', { id: currentSolId });
   if (!r.ok) { toast(r.error, 'error'); return; }
@@ -517,8 +531,8 @@ async function loadUsuarios() {
     <tr>
       <td><strong>${escHtml(u.nombre)}</strong></td>
       <td>${escHtml(u.email)}</td>
-      <td><span class="badge badge-${u.rol}">${u.rol}</span></td>
-      <td>${u.departamento || '—'}</td>
+      <td><span class="badge badge-${escHtml(u.rol)}">${escHtml(u.rol)}</span></td>
+      <td>${escHtml(u.departamento || '—')}</td>
       <td>
         <span style="display:inline-flex;align-items:center;gap:6px">
           <span style="width:8px;height:8px;border-radius:50%;background:${u.activo ? '#0e9f6e' : '#e02424'}"></span>
@@ -527,7 +541,7 @@ async function loadUsuarios() {
       </td>
       <td>${fmtDate(u.ultimo_login)}</td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="toggleUsuario(${u.id})">
+        <button class="btn btn-sm btn-outline" onclick="toggleUsuario(${parseInt(u.id, 10)})">
           ${u.activo ? 'Desactivar' : 'Activar'}
         </button>
       </td>
@@ -553,10 +567,10 @@ async function crearUsuario(e) {
   e.preventDefault();
   const f = e.target;
   const r = await api('usuario_crear', {
-    nombre:       f.nombre.value,
-    email:        f.email.value,
-    password:     f.password.value,
-    rol:          f.rol.value,
+    nombre: f.nombre.value,
+    email: f.email.value,
+    password: f.password.value,
+    rol: f.rol.value,
     departamento: f.departamento.value,
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
@@ -567,56 +581,47 @@ async function crearUsuario(e) {
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 function escHtml(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /* ── Init ────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
-  // Login
   document.getElementById('login-form').addEventListener('submit', doLogin);
 
-  // Nav links
   document.querySelectorAll('.sidebar nav a[data-view]').forEach(a => {
     a.addEventListener('click', e => {
       e.preventDefault();
       const v = a.dataset.view;
       showView(v);
       if (v === 'dashboard') loadDashboard();
-      if (v === 'lista')     loadLista();
-      if (v === 'usuarios')  loadUsuarios();
+      if (v === 'lista') loadLista();
+      if (v === 'usuarios') loadUsuarios();
     });
   });
 
-  // Burger
   document.getElementById('burger-btn').addEventListener('click', toggleSidebar);
 
-  // User dropdown logout
   document.getElementById('user-badge').addEventListener('click', () => {
     if (confirm('¿Cerrar sesión?')) doLogout();
   });
 
-  // Guardar / Enviar buttons
   document.getElementById('btn-guardar').addEventListener('click', () => guardarSolicitud(false));
-  document.getElementById('btn-enviar').addEventListener('click',  enviarSolicitud);
+  document.getElementById('btn-enviar').addEventListener('click', enviarSolicitud);
 
-  // Admin buttons
-  document.getElementById('btn-aprobar')?.addEventListener('click',   () => cambiarEstado('aprobado'));
-  document.getElementById('btn-rechazar')?.addEventListener('click',  () => cambiarEstado('rechazado'));
-  document.getElementById('btn-revision')?.addEventListener('click',  () => cambiarEstado('en_revision'));
+  document.getElementById('btn-aprobar')?.addEventListener('click', () => cambiarEstado('aprobado'));
+  document.getElementById('btn-rechazar')?.addEventListener('click', () => cambiarEstado('rechazado'));
+  document.getElementById('btn-revision')?.addEventListener('click', () => cambiarEstado('en_revision'));
 
-  // Nueva solicitud
+  // Bug #4 fix: btn-nueva-sol2 ya no llama showView('lista') innecesariamente
   document.getElementById('btn-nueva-sol')?.addEventListener('click', nuevaSolicitud);
-  document.getElementById('btn-nueva-sol2')?.addEventListener('click', () => { showView('lista'); nuevaSolicitud(); });
+  document.getElementById('btn-nueva-sol2')?.addEventListener('click', nuevaSolicitud);
 
-  // Filtros lista
   document.getElementById('search-input')?.addEventListener('input', filterLista);
   document.getElementById('filter-estado')?.addEventListener('change', filterLista);
 
-  // Usuarios modal
   document.getElementById('btn-nuevo-usuario')?.addEventListener('click', openUsuarioModal);
-  document.getElementById('btn-close-modal')?.addEventListener('click',  closeUsuarioModal);
+  document.getElementById('btn-close-modal')?.addEventListener('click', closeUsuarioModal);
   document.getElementById('form-usuario')?.addEventListener('submit', crearUsuario);
 
-  // Boot
   checkLogin();
 });
