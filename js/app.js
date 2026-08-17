@@ -50,8 +50,19 @@ function showView(id) {
 }
 
 function fmtDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (!d || d === '—') return '—';
+
+  // Extraemos solo los primeros 10 caracteres (YYYY-MM-DD)
+  const fechaPura = String(d).substring(0, 10);
+  const partes = fechaPura.split('-');
+  if (partes.length !== 3) return d;
+
+  const dateObj = new Date(partes[0], partes[1] - 1, partes[2]);
+  return dateObj.toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 }
 function fmtPct(n) { return parseFloat(n || 0).toFixed(1) + '%'; }
 
@@ -147,45 +158,73 @@ async function loadDashboard() {
 
   renderSolicitudesTable(r.data, 'dash-table-body', true);
 }
-function fmtDate(d) {
-  if (!d || d === '—') return '—';
 
-  // 1. Extraemos SIEMPRE solo los primeros 10 caracteres (YYYY-MM-DD).
-  // Esto ignora automáticamente las horas, espacios o "T"s que vengan pegadas.
-  const fechaPura = String(d).substring(0, 10);
+/* ── Countdown para Fecha de Entrega a Líder ─────────────────── */
+/**
+ * Calcula días restantes hacia una fecha y devuelve un badge HTML coloreado.
+ * Colores:
+ *   Retraso (diff < 0)  → rojo fuerte  #dc2626
+ *   Hoy / ≤ 2 días      → rojo suave   #ef4444
+ *   3–5 días            → amarillo     #d97706
+ *   ≥ 6 días            → verde        #059669
+ */
+function renderCountdownLider(fechaStr) {
+  if (!fechaStr) return '';
+  const partes = String(fechaStr).substring(0, 10).split('-');
+  if (partes.length !== 3 || partes[0] === '0000') return '';
 
-  // 2. Partimos el texto en Año, Mes y Día
-  const partes = fechaPura.split('-');
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fecha = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+  const diff = Math.round((fecha - hoy) / (1000 * 60 * 60 * 24));
 
-  // Si por alguna razón la cadena no tiene el formato correcto, la devolvemos tal cual
-  if (partes.length !== 3) return d;
+  let bg, color, texto;
 
-  // 3. Construimos la fecha en zona local (Recordando que los meses en JS van de 0 a 11)
-  const dateObj = new Date(partes[0], partes[1] - 1, partes[2]);
+  if (diff < 0) {
+    // Retraso — rojo fuerte
+    const dias = Math.abs(diff);
+    bg = '#fee2e2'; color = '#dc2626';
+    texto = `⚠️ Retraso ${dias} día${dias !== 1 ? 's' : ''}`;
+  } else if (diff === 0) {
+    // Vence hoy — rojo suave
+    bg = '#fecaca'; color = '#ef4444';
+    texto = '🔴 Vence hoy';
+  } else if (diff <= 2) {
+    // 1–2 días — rojo suave
+    bg = '#fecaca'; color = '#ef4444';
+    texto = `Faltan ${diff} día${diff !== 1 ? 's' : ''}`;
+  } else if (diff <= 5) {
+    // 3–5 días — amarillo
+    bg = '#fef3c7'; color = '#d97706';
+    texto = `Faltan ${diff} días`;
+  } else {
+    // 6+ días — verde
+    bg = '#d1fae5'; color = '#059669';
+    texto = `Faltan ${diff} días`;
+  }
 
-  return dateObj.toLocaleDateString('es-MX', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+  return `<span style="display:inline-block;padding:2px 7px;border-radius:12px;` +
+         `font-size:10px;font-weight:600;background:${bg};color:${color};white-space:nowrap">${texto}</span>`;
 }
 
 /* ── Render fechas clave ─────────────────────────────────────── */
 function renderFechasClave(s) {
   const fechas = [
-    { label: 'Entrada', val: s.fecha_entrada },
-    { label: 'Entrega eq.', val: s.fecha_entrega_equipo },
-    { label: 'Est. cierre', val: s.fecha_estimada_cierre },
-    { label: 'Entrega ldr.', val: s.fecha_entrega_lider },
-    { label: 'Cierre', val: s.fecha_cierre },
+    { label: 'Entrada',      val: s.fecha_entrada },
+    { label: 'Entrega eq.',  val: s.fecha_entrega_equipo },
+    { label: 'Est. cierre',  val: s.fecha_estimada_cierre },
+    { label: 'Entrega ldr.', val: s.fecha_entrega_lider, countdown: true },
+    { label: 'Cierre',       val: s.fecha_cierre },
   ];
 
   const filas = fechas.map(f => {
-    const tieneValor = f.val && f.val !== '—';
+    const tieneValor = f.val && f.val !== '—' && f.val !== null;
     const colorFecha = tieneValor ? '#111827' : '#d1d5db';
-    return `<div style="display:flex;gap:4px;align-items:baseline">
+    const countdownHtml = (f.countdown && tieneValor) ? renderCountdownLider(f.val) : '';
+    return `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
       <span style="color:#9ca3af;font-size:10px;min-width:70px;flex-shrink:0">${f.label}:</span>
       <span style="color:${colorFecha};font-size:11px;font-weight:${tieneValor ? '500' : '400'}">${fmtDate(f.val)}</span>
+      ${countdownHtml}
     </div>`;
   }).join('');
 
@@ -318,15 +357,54 @@ function renderFormSolicitud(sol) {
       let inputHtml = '';
 
       if (campo.tipo === 'text' || campo.tipo === 'number') {
-        inputHtml = `<input type="${campo.tipo}" id="f-${campo.clave}" name="${campo.clave}"
-          class="form-control" value="${escHtml(val)}" ${dis}
-          onchange="scheduleAutoSave()" oninput="scheduleAutoSave()">`;
+        // ── Campos auto-calculados de Volumen (readonly) ──────────
+        const VOLUMEN_AUTO = {
+          'vol_piezas_dia':        'Auto (EAU ÷ 260)',
+          'vol_piezas_mes':        'Auto (EAU ÷ 12)',
+          'vol_facturacion_anual': 'Auto (precio × EAU)',
+        };
+        if (VOLUMEN_AUTO[campo.clave]) {
+          inputHtml = `
+            <div style="position:relative">
+              <input type="number" id="f-${campo.clave}" name="${campo.clave}"
+                class="form-control" value="${escHtml(val)}"
+                readonly
+                style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;padding-right:130px"
+                tabindex="-1">
+              <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                           font-size:10px;color:#9ca3af;pointer-events:none;white-space:nowrap">
+                ${VOLUMEN_AUTO[campo.clave]}
+              </span>
+            </div>`;
+        } else {
+          inputHtml = `<input type="${campo.tipo}" id="f-${campo.clave}" name="${campo.clave}"
+            class="form-control" value="${escHtml(val)}" ${dis}
+            onchange="scheduleAutoSave()" oninput="scheduleAutoSave()">`;
+        }
 
       } else if (campo.tipo === 'date') {
         const dateVal = val ? val.split('T')[0] : '';
-        inputHtml = `<input type="date" id="f-${campo.clave}" name="${campo.clave}"
-          class="form-control" value="${escHtml(dateVal)}" ${dis}
-          onchange="scheduleAutoSave()">`;
+
+        // ── CAMBIO 1: fecha_estimada_cierre es siempre de solo lectura
+        //    Se calcula automáticamente como fecha_entrada + 10 días.
+        if (campo.clave === 'fecha_estimada_cierre') {
+          inputHtml = `
+            <div style="position:relative">
+              <input type="date" id="f-${campo.clave}" name="${campo.clave}"
+                class="form-control" value="${escHtml(dateVal)}"
+                readonly
+                style="background:#f3f4f6;color:#6b7280;cursor:not-allowed;"
+                tabindex="-1">
+              <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                           font-size:10px;color:#9ca3af;pointer-events:none">
+                Auto (+10 días)
+              </span>
+            </div>`;
+        } else {
+          inputHtml = `<input type="date" id="f-${campo.clave}" name="${campo.clave}"
+            class="form-control" value="${escHtml(dateVal)}" ${dis}
+            onchange="scheduleAutoSave()">`;
+        }
 
       } else if (campo.tipo === 'textarea') {
         inputHtml = `<textarea id="f-${campo.clave}" name="${campo.clave}"
@@ -398,6 +476,12 @@ function renderFormSolicitud(sol) {
   renderHistorial(sol.historial || []);
 
   setupPreformadosToggle(sol);
+
+  // ── CAMBIO 1b: activar el cálculo automático de fecha_estimada_cierre
+  setupFechaEstimadaCierre();
+
+  // ── Activar cálculos automáticos de Volumen
+  setupVolumenAutoCalc();
 }
 
 /* ── Preformados: mostrar sección solo si hay tipo preformado ── */
@@ -429,6 +513,97 @@ function setupPreformadosToggle(sol) {
   });
 }
 
+/* ── Fecha Estimada de Cierre: auto-calcular como Entrada + 10 días ── */
+/**
+ * Escucha cambios en #f-fecha_entrada y actualiza automáticamente
+ * #f-fecha_estimada_cierre sumando 10 días calendario.
+ * El campo destino es readonly; solo se actualiza por esta función.
+ */
+function setupFechaEstimadaCierre() {
+  const entradaEl = document.getElementById('f-fecha_entrada');
+  const cierreEl  = document.getElementById('f-fecha_estimada_cierre');
+  if (!entradaEl || !cierreEl) return;
+
+  function calcularYAsignar() {
+    const val = entradaEl.value;
+    if (!val) {
+      cierreEl.value = '';
+      scheduleAutoSave();
+      return;
+    }
+    // Parsear sin problemas de zona horaria
+    const [y, m, d] = val.split('-').map(Number);
+    const fecha = new Date(y, m - 1, d + 10);          // +10 días calendario
+    const yyyy  = fecha.getFullYear();
+    const mm    = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dd    = String(fecha.getDate()).padStart(2, '0');
+    cierreEl.value = `${yyyy}-${mm}-${dd}`;
+    scheduleAutoSave();
+  }
+
+  entradaEl.addEventListener('change', calcularYAsignar);
+
+  // Si ya hay valor guardado de fecha_entrada pero cierre está vacío, calcular ahora
+  if (entradaEl.value && !cierreEl.value) {
+    calcularYAsignar();
+  }
+}
+
+/* ── Volumen: cálculos automáticos ───────────────────────────── */
+/**
+ * vol_piezas_mes        = vol_piezas_dia  × 30  (días/mes)
+ * vol_facturacion_anual = vol_precio_objetivo × vol_eau
+ * Ambos campos son readonly; solo esta función los actualiza.
+ */
+function setupVolumenAutoCalc() {
+  const eauEl    = document.getElementById('f-vol_eau');
+  const precioEl = document.getElementById('f-vol_precio_objetivo');
+  
+  const diasEl   = document.getElementById('f-vol_piezas_dia');
+  const mesEl    = document.getElementById('f-vol_piezas_mes');
+  const factEl   = document.getElementById('f-vol_facturacion_anual');
+
+  function calcularVolumen() {
+    if (!eauEl) return;
+
+    // Convertimos a número, si está vacío o es inválido usamos 0
+    const eau = parseFloat(eauEl.value) || 0;
+    const precio = parseFloat(precioEl?.value) || 0;
+
+    // 1. Cálculos de Piezas (Dependen solo de EAU)
+    if (eau > 0) {
+      if (diasEl) diasEl.value = Math.round(eau / 260);
+      if (mesEl)  mesEl.value  = Math.round(eau / 12);
+    } else {
+      if (diasEl) diasEl.value = '';
+      if (mesEl)  mesEl.value  = '';
+    }
+
+    // 2. Cálculo de Facturación (Depende de EAU y Precio)
+    if (eau > 0 && precio > 0) {
+      if (factEl) factEl.value = (precio * eau).toFixed(2);
+    } else {
+      if (factEl) factEl.value = '';
+    }
+
+    scheduleAutoSave();
+  }
+
+  // Escuchar eventos en EAU y Precio Objetivo
+  if (eauEl) {
+    eauEl.addEventListener('input',  calcularVolumen);
+    eauEl.addEventListener('change', calcularVolumen);
+  }
+  if (precioEl) {
+    precioEl.addEventListener('input',  calcularVolumen);
+    precioEl.addEventListener('change', calcularVolumen);
+  }
+
+  // Recalcular al abrir la solicitud si ya existe un EAU pero los campos calculados están vacíos
+  if (eauEl?.value && (!diasEl?.value || !mesEl?.value || !factEl?.value)) {
+    calcularVolumen();
+  }
+}
 function renderHistorial(hist) {
   const el = document.getElementById('historial-body');
   if (!hist.length) { el.innerHTML = '<p class="text-gray text-sm">Sin historial aún.</p>'; return; }
