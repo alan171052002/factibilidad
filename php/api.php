@@ -272,11 +272,13 @@ function action_solicitud_lista(): never
 {
     $sess = requireLogin();
     $pdo = getDB();
-
+ 
     $where = $sess['rol'] === 'admin' ? '' : 'WHERE s.creado_por = ' . (int) $sess['user_id'];
     $stmt = $pdo->query(
         "SELECT s.id, s.folio, s.cliente, s.lider_proyecto, s.estado,
                 s.porcentaje_completado, s.creado_en, s.enviado_en,
+                s.fecha_entrada, s.fecha_entrega_equipo, s.fecha_estimada_cierre,
+                s.fecha_entrega_lider, s.fecha_cierre,
                 u.nombre as creado_por_nombre
          FROM solicitudes s JOIN usuarios u ON s.creado_por = u.id
          $where ORDER BY s.creado_en DESC LIMIT 200"

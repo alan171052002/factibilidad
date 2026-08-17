@@ -26,7 +26,6 @@ async function api(action, data = {}, method = 'POST') {
     const json = await res.json();
     return json;
   } catch (err) {
-    // Bug #5 fix: capturar errores de red y devolverlos como respuesta normalizada
     console.error('API error:', err);
     return { ok: false, error: 'Error de conexión. Verifica tu red e intenta de nuevo.' };
   }
@@ -73,14 +72,13 @@ async function doLogin(e) {
   const pass = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
 
-  // Bug #1 fix: mostrar el elemento antes de escribir el error
   errEl.style.display = 'none';
   errEl.textContent = '';
 
   const r = await api('login', { email, password: pass });
   if (!r.ok) {
     errEl.textContent = r.error;
-    errEl.style.display = 'block';   // ← antes nunca se mostraba
+    errEl.style.display = 'block';
     return;
   }
   currentUser = r.data;
@@ -149,16 +147,59 @@ async function loadDashboard() {
 
   renderSolicitudesTable(r.data, 'dash-table-body', true);
 }
+function fmtDate(d) {
+  if (!d || d === '—') return '—';
+
+  // 1. Extraemos SIEMPRE solo los primeros 10 caracteres (YYYY-MM-DD).
+  // Esto ignora automáticamente las horas, espacios o "T"s que vengan pegadas.
+  const fechaPura = String(d).substring(0, 10);
+
+  // 2. Partimos el texto en Año, Mes y Día
+  const partes = fechaPura.split('-');
+
+  // Si por alguna razón la cadena no tiene el formato correcto, la devolvemos tal cual
+  if (partes.length !== 3) return d;
+
+  // 3. Construimos la fecha en zona local (Recordando que los meses en JS van de 0 a 11)
+  const dateObj = new Date(partes[0], partes[1] - 1, partes[2]);
+
+  return dateObj.toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+/* ── Render fechas clave ─────────────────────────────────────── */
+function renderFechasClave(s) {
+  const fechas = [
+    { label: 'Entrada', val: s.fecha_entrada },
+    { label: 'Entrega eq.', val: s.fecha_entrega_equipo },
+    { label: 'Est. cierre', val: s.fecha_estimada_cierre },
+    { label: 'Entrega ldr.', val: s.fecha_entrega_lider },
+    { label: 'Cierre', val: s.fecha_cierre },
+  ];
+
+  const filas = fechas.map(f => {
+    const tieneValor = f.val && f.val !== '—';
+    const colorFecha = tieneValor ? '#111827' : '#d1d5db';
+    return `<div style="display:flex;gap:4px;align-items:baseline">
+      <span style="color:#9ca3af;font-size:10px;min-width:70px;flex-shrink:0">${f.label}:</span>
+      <span style="color:${colorFecha};font-size:11px;font-weight:${tieneValor ? '500' : '400'}">${fmtDate(f.val)}</span>
+    </div>`;
+  }).join('');
+
+  return `<div style="display:flex;flex-direction:column;gap:3px">${filas}</div>`;
+}
 
 function renderSolicitudesTable(data, tbodyId, limit = false) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   const rows = limit ? data.slice(0, 8) : data;
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray" style="padding:32px">No hay solicitudes</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray" style="padding:32px">No hay solicitudes</td></tr>';
     return;
   }
-  // Bug #6 fix: pasar folio, cliente, lider_proyecto y estado por escHtml
   tbody.innerHTML = rows.map(s => `
     <tr>
       <td><strong>${escHtml(s.folio)}</strong></td>
@@ -173,6 +214,7 @@ function renderSolicitudesTable(data, tbodyId, limit = false) {
         </div>
       </td>
       <td><span class="badge badge-${escHtml(s.estado)}">${estadoLabel(s.estado)}</span></td>
+      <td>${renderFechasClave(s)}</td>
       <td>${fmtDate(s.creado_en)}</td>
       <td>
         <button class="btn btn-sm btn-outline" onclick="openSolicitud(${parseInt(s.id, 10)})">Ver / Editar</button>
@@ -214,7 +256,6 @@ async function nuevaSolicitud() {
   const r = await api('solicitud_nueva');
   if (!r.ok) { toast(r.error, 'error'); return; }
   toast('Solicitud creada: ' + r.data.folio, 'success');
-  // Bug #4 fix: openSolicitud ya navega a 'solicitud', no hace falta showView('lista') aquí
   await openSolicitud(r.data.id);
 }
 
@@ -228,7 +269,6 @@ async function openSolicitud(id) {
 }
 
 function renderFormSolicitud(sol) {
-  // Bug #3 fix: bloquear inputs para cualquier estado no-borrador cuando el usuario no es admin
   const estadosBloqueados = ['enviado', 'en_revision', 'aprobado', 'rechazado'];
   const isReadOnly = estadosBloqueados.includes(sol.estado) && currentUser.rol !== 'admin';
 
@@ -264,13 +304,12 @@ function renderFormSolicitud(sol) {
     const grid = div.querySelector(`#sec-${seccion.id}`);
 
     seccion.campos.forEach(campo => {
-      // Busca primero en la raíz (ej. sol.cliente), si es undefined, busca en sol.campos (ej. sol.campos.vol_eau)
       let val = sol[campo.clave];
       if (val === undefined || val === null) {
         val = sol.campos?.[campo.clave] ?? '';
       }
       const req = campo.requerido;
-      const dis = isReadOnly ? 'disabled' : '';   // Bug #3 fix
+      const dis = isReadOnly ? 'disabled' : '';
       const pLabel = campo.peso > 0
         ? ` <small style="color:#6b7280;font-weight:400">(${(campo.peso * 100).toFixed(0)}%)</small>`
         : '';
@@ -352,7 +391,6 @@ function renderFormSolicitud(sol) {
   document.getElementById('btn-guardar').style.display = isBorrador ? '' : 'none';
   document.getElementById('btn-enviar').style.display = isBorrador ? '' : 'none';
 
-  // Bug #2 fix: usar 'flex' explícitamente al mostrar, nunca '' (que resuelve a block)
   const showAdmin = currentUser.rol === 'admin' && sol.estado === 'enviado';
   document.getElementById('admin-actions').style.display = showAdmin ? 'flex' : 'none';
 
@@ -612,7 +650,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-rechazar')?.addEventListener('click', () => cambiarEstado('rechazado'));
   document.getElementById('btn-revision')?.addEventListener('click', () => cambiarEstado('en_revision'));
 
-  // Bug #4 fix: btn-nueva-sol2 ya no llama showView('lista') innecesariamente
   document.getElementById('btn-nueva-sol')?.addEventListener('click', nuevaSolicitud);
   document.getElementById('btn-nueva-sol2')?.addEventListener('click', nuevaSolicitud);
 
