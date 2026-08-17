@@ -218,6 +218,7 @@ function renderSolicitudesTable(data, tbodyId, limit = false) {
       <td>${fmtDate(s.creado_en)}</td>
       <td>
         <button class="btn btn-sm btn-outline" onclick="openSolicitud(${parseInt(s.id, 10)})">Ver / Editar</button>
+        <a class="btn btn-sm btn-outline" href="php/export.php?id=${parseInt(s.id, 10)}" target="_blank">Imprimir</a>
       </td>
     </tr>
   `).join('');
