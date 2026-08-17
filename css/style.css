@@ -501,7 +501,6 @@ tbody tr:last-child td {
 }
 
 /* ── Forms ───────────────────────────────────────────────────── */
-.form-group {
   display: flex;
   flex-direction: column;
   height: 100%; /* Permite que tome todo el alto de la celda en el Grid */
