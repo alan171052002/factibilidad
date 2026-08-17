@@ -1,7 +1,7 @@
 <?php
 date_default_timezone_set('America/Mexico_City');
 // ============================================================
-//  EXPORTAR PDF — Factibilidad DFM (Optimizado a Max 3 Hojas)
+//  EXPORTAR PDF — Factibilidad DFM (Ultra-Optimizado Max 2 Hojas)
 //  Genera un documento HTML optimizado para impresión/PDF
 //  Uso: php/export_pdf.php?id=42  (sesión activa requerida)
 // ============================================================
@@ -194,9 +194,10 @@ header('Content-Type: text/html; charset=utf-8');
             color: var(--gray-900);
             background: #fff;
             padding: 0;
+            overflow-wrap: break-word;
         }
 
-        /* ── Pantalla: botón de impresión ── */
+        /* ── Pantalla ── */
         @media screen {
             body {
                 background: #e5e7eb;
@@ -248,119 +249,191 @@ header('Content-Type: text/html; charset=utf-8');
             }
         }
 
-        /* ── OPTIMIZACIÓN ULTRA-COMPACTA PARA IMPRESIÓN (MAX 3 HOJAS) ── */
+        /* ── OPTIMIZACIÓN EXTREMA PARA IMPRESIÓN (MAX 2 HOJAS) ── */
         @media print {
-            body {
-                font-size: 10px;
-                background: #fff;
+
+            /* Definición del margen físico más amplio */
+            @page {
+                size: letter;
+                margin: 2cm;
+                /* 2 centímetros de margen físico por default */
             }
 
-            /* Fuente más pequeña global */
+            body {
+                font-size: 9px;
+                background: #fff;
+                margin: 0;
+                padding: 0;
+            }
+
             .print-actions {
                 display: none;
             }
 
+            /* DOBLE SEGURO: Agregamos padding interno arriba y a los lados por si el navegador ignora el @page */
             .page {
-                padding: 0;
+                padding: 25px 35px !important;
+                /* Despegado de arriba y de los costados */
                 margin: 0;
                 box-shadow: none;
+                width: 100%;
                 max-width: 100%;
+                box-sizing: border-box;
             }
 
-            /* Reducción extrema de espacios */
+            /* Encabezado mínimo */
             .doc-header {
-                padding: 10px 15px !important;
-                margin-bottom: 8px !important;
+                padding: 8px 12px !important;
+                margin-bottom: 6px !important;
             }
 
             .doc-header .title {
-                font-size: 15px !important;
+                font-size: 12px !important;
+            }
+
+            .doc-header .subtitle {
+                font-size: 8px !important;
+                margin-top: 0 !important;
             }
 
             .doc-header .folio {
-                font-size: 18px !important;
+                font-size: 14px !important;
             }
 
+            /* Grid a 6 columnas para compactar altura */
             .meta-grid {
-                margin-bottom: 8px !important;
+                grid-template-columns: repeat(6, 1fr) !important;
+                margin-bottom: 6px !important;
             }
 
             .meta-cell {
-                padding: 5px 10px !important;
+                padding: 4px 6px !important;
+            }
+
+            .meta-cell .ml {
+                font-size: 7px !important;
+                margin-bottom: 1px !important;
             }
 
             .meta-cell .mv {
-                font-size: 11px !important;
+                font-size: 9px !important;
             }
 
+            /* Barra de progreso aplanada en línea */
             .progress-box {
-                padding: 8px 12px !important;
-                margin-bottom: 10px !important;
+                padding: 4px 8px !important;
+                margin-bottom: 6px !important;
+                display: flex;
+                align-items: center;
+                gap: 12px;
             }
 
+            .progress-header {
+                margin-bottom: 0 !important;
+                flex-shrink: 0;
+                width: auto !important;
+            }
+
+            .progress-pct {
+                font-size: 12px !important;
+                margin-left: 6px;
+                display: inline-block;
+            }
+
+            .progress-label {
+                display: inline-block;
+                font-size: 9px !important;
+            }
+
+            .progress-track {
+                flex-grow: 1;
+                height: 6px !important;
+            }
+
+            .progress-tip {
+                margin-top: 0 !important;
+                font-size: 8px !important;
+                flex-shrink: 0;
+            }
+
+            /* Secciones a 3 columnas */
             .section {
                 margin-bottom: 6px !important;
                 break-inside: avoid;
+                border-radius: 4px !important;
             }
 
             .section-header {
-                padding: 6px 10px !important;
-                font-size: 11px !important;
+                padding: 4px 8px !important;
+                font-size: 10px !important;
+                border-bottom: 1px solid var(--gray-200) !important;
+            }
+
+            .fields-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
             }
 
             .field-cell {
-                padding: 3px 8px !important;
+                padding: 4px 6px !important;
+                border-bottom: 1px solid var(--gray-100) !important;
+                border-right: 1px solid var(--gray-100) !important;
+                overflow: hidden;
+            }
+
+            .field-cell:nth-child(3n) {
+                border-right: none !important;
             }
 
             .field-label {
-                font-size: 8px !important;
+                font-size: 7px !important;
+                margin-bottom: 2px !important;
             }
 
             .field-value,
             .field-empty {
-                font-size: 10px !important;
+                font-size: 9px !important;
+                word-break: break-word;
             }
 
-            /* Tablas e Historial compactos */
+            /* Tablas */
             .historial-table th,
             .historial-table td {
-                padding: 4px 6px !important;
-                font-size: 9px !important;
+                padding: 3px 5px !important;
+                font-size: 8px !important;
             }
 
             .missing-header {
-                padding: 8px 12px !important;
+                padding: 5px 8px !important;
             }
 
             .missing-header h2 {
-                font-size: 13px !important;
+                font-size: 11px !important;
             }
 
             .missing-table th,
             .missing-table td {
-                padding: 4px 6px !important;
-                font-size: 9px !important;
-            }
-
-            .all-ok {
-                padding: 8px !important;
-                font-size: 11px !important;
-            }
-
-            .doc-footer {
-                margin-top: 10px !important;
-                padding-top: 8px !important;
+                padding: 3px 5px !important;
                 font-size: 8px !important;
             }
 
-            /* Evitar cortes feos a mitad de sección sin forzar página nueva */
+            .all-ok {
+                padding: 6px !important;
+                font-size: 10px !important;
+            }
+
+            .doc-footer {
+                margin-top: 8px !important;
+                padding-top: 6px !important;
+                font-size: 7px !important;
+            }
+
             .avoid-break {
                 break-inside: avoid;
                 page-break-inside: avoid;
             }
         }
 
-        /* ── Estilos Generales (Compartidos) ── */
+        /* ── Estilos Generales ── */
         .doc-header {
             background: var(--primary);
             color: #fff;
@@ -703,13 +776,19 @@ header('Content-Type: text/html; charset=utf-8');
             <div class="progress-track">
                 <div class="progress-fill" style="width:<?= min($pct, 100) ?>%;background:<?= $bar_color ?>"></div>
             </div>
+            <div class="progress-tip">
+                <?php if ($pct >= 75): ?>
+                    ✅ Listo
+                <?php else: ?>
+                    ⚠️ Falta <?= number_format(75 - $pct, 1) ?>%
+                <?php endif; ?>
+            </div>
         </div>
 
         <!-- ── SECCIONES DE CAMPOS ── -->
         <?php foreach ($campos_def as $seccion): ?>
             <?php
             $total_peso_sec = array_sum(array_column($seccion['campos'], 'peso'));
-            $num_campos = count($seccion['campos']);
             ?>
             <div class="section avoid-break">
                 <div class="section-header">
@@ -738,9 +817,6 @@ header('Content-Type: text/html; charset=utf-8');
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
-                    <?php if ($num_campos % 2 !== 0): ?>
-                        <div class="field-cell"></div>
-                    <?php endif; ?>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -789,9 +865,9 @@ header('Content-Type: text/html; charset=utf-8');
         <!-- ══════════════════════════════════════════════════════════ -->
         <!--  RESUMEN DE INFORMACIÓN FALTANTE                          -->
         <!-- ══════════════════════════════════════════════════════════ -->
-        <div class="avoid-break" style="margin-top:16px;">
+        <div class="avoid-break" style="margin-top:10px;">
             <div class="missing-header">
-                <span style="font-size:18px">⚠️</span>
+                <span style="font-size:14px">⚠️</span>
                 <h2>Resumen de Información Faltante</h2>
             </div>
 
